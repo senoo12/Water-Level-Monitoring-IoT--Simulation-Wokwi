@@ -67,6 +67,21 @@ func (s *SensorService) ProcessData(data model.SensorData) (string, int, float64
 		statusCode,
 	)
 	if err != nil {
+		fmt.Println("ERROR SEND DATA:", err)
+		return "", 0, 0, err
+	}
+
+	// ===== SIMPAN KE GOOGLE SHEET =====
+	err = repository.SaveToGoogleSheet(
+		waterLevel,
+		data.Temperature,
+		data.Pressure,
+		data.Distance,
+		status,
+	)
+
+	if err != nil {
+		fmt.Println("ERROR SEND DATA:", err)
 		return "", 0, 0, err
 	}
 

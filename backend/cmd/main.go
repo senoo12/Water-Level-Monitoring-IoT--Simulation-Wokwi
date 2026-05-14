@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
 	"water-monitor/internal/config"
 	"water-monitor/internal/handler"
 	"water-monitor/internal/repository"
@@ -9,6 +10,7 @@ import (
 )
 
 func main() {
+	godotenv.Load()
 	cfg := config.LoadConfig()
 
 	repo := repository.NewThingSpeakRepository(cfg.ThingSpeakAPIKey)

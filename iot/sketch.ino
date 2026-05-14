@@ -2,13 +2,14 @@
 #include <HTTPClient.h>
 #include <Wire.h>
 #include <Adafruit_BMP085.h>
+#include <ArduinoJson.h> 
 
 // ===== WIFI =====
-const char* ssid = "Wokwi-GUEST";
-const char* password = "";
+const char *ssid = "Wokwi-GUEST";
+const char *password = "";
 
 // ===== API =====
-const char* serverName = "https://46mp8r92-8080.asse.devtunnels.ms/sensor";
+const char *serverName = "https://46mp8r92-8080.asse.devtunnels.ms/sensor";
 
 // ===== PIN ULTRASONIC =====
 #define TRIG_PIN 5
@@ -22,7 +23,8 @@ float distance;
 float temperature;
 float pressure;
 
-void setup() {
+void setup()
+{
   Serial.begin(115200);
 
   pinMode(TRIG_PIN, OUTPUT);
@@ -32,7 +34,8 @@ void setup() {
   WiFi.begin(ssid, password);
   Serial.print("Connecting to WiFi");
 
-  while (WiFi.status() != WL_CONNECTED) {
+  while (WiFi.status() != WL_CONNECTED)
+  {
     delay(500);
     Serial.print(".");
   }
@@ -40,72 +43,94 @@ void setup() {
   Serial.println("\nConnected!");
 
   // BMP180 init
-  if (!bmp.begin()) {
+  if (!bmp.begin())
+  {
     Serial.println("BMP180 not found!");
-    while (1);
+    while (1)
+      ;
   }
 }
 
-// ===== ULTRASONIC =====
-float readDistance() {
+float readDistance()
+{
   digitalWrite(TRIG_PIN, LOW);
   delayMicroseconds(2);
-
   digitalWrite(TRIG_PIN, HIGH);
   delayMicroseconds(10);
   digitalWrite(TRIG_PIN, LOW);
 
   long duration = pulseIn(ECHO_PIN, HIGH);
   float dist = duration * 0.034 / 2;
-
   return dist;
 }
 
-void loop() {
-
+void loop()
+{
   // ===== READ SENSOR =====
   distance = readDistance();
   temperature = bmp.readTemperature();
   pressure = bmp.readPressure() / 100.0; // hPa
 
-  // ===== DEBUG PRINT =====
-  Serial.println("===== DATA =====");
-  Serial.print("Distance: "); Serial.println(distance);
-  Serial.print("Temp: "); Serial.println(temperature);
-  Serial.print("Pressure: "); Serial.println(pressure);
-  Serial.println("================");
-
   // ===== SEND TO API =====
-  if (WiFi.status() == WL_CONNECTED) {
+  if (WiFi.status() == WL_CONNECTED)
+  {
     HTTPClient http;
-
     http.begin(serverName);
+    http.setTimeout(30000);
     http.addHeader("Content-Type", "application/json");
 
-    // JSON body (SESUAI API BARU)
-    String json = "{";
-    json += "\"distance\":" + String(distance, 2) + ",";
-    json += "\"temperature\":" + String(temperature, 2) + ",";
-    json += "\"pressure\":" + String(pressure, 2);
-    json += "}";
+    // JSON body untuk request
+    StaticJsonDocument<200> reqDoc;
+    reqDoc["distance"] = distance;
+    reqDoc["temperature"] = temperature;
+    reqDoc["pressure"] = pressure;
 
-    int httpResponseCode = http.POST(json);
+    String jsonRequest;
+    serializeJson(reqDoc, jsonRequest);
 
-    Serial.print("HTTP Response: ");
-    Serial.println(httpResponseCode);
+    int httpResponseCode = http.POST(jsonRequest);
 
-    if (httpResponseCode > 0) {
-      String response = http.getString();
-      Serial.println("Response Body:");
-      Serial.println(response);
-    } else {
-      Serial.print("Error: ");
+    if (httpResponseCode > 0)
+    {
+      String responsePayload = http.getString();
+
+      // ===== PARSING RESPONSE DARI SERVER =====
+      StaticJsonDocument<512> resDoc;
+      DeserializationError error = deserializeJson(resDoc, responsePayload);
+
+      if (!error)
+      {
+        // Mengambil data dari objek "data" sesuai postman
+        bool success = resDoc["success"];
+        const char *status = resDoc["data"]["status"];
+        int statusCode = resDoc["data"]["status_code"];
+        float waterLevel = resDoc["data"]["water_level"];
+
+        // ===== DEBUG PRINT HASIL API =====
+        Serial.println("\n--- SERVER RESPONSE ---");
+        Serial.print("Status: ");
+        Serial.println(status);
+        Serial.print("Status Code: ");
+        Serial.println(statusCode);
+        Serial.print("Water Level: ");
+        Serial.print(waterLevel);
+        Serial.println(" cm");
+        Serial.println("-----------------------\n");
+      }
+      else
+      {
+        Serial.print("JSON Parsing Error: ");
+        Serial.println(error.f_str());
+      }
+    }
+    else
+    {
+      Serial.print("Error on sending POST: ");
       Serial.println(http.errorToString(httpResponseCode));
     }
 
     http.end();
   }
 
-  // ===== DELAY (IMPORTANT untuk ThingSpeak) =====
-  delay(15000); // 15 detik (hindari rate limit)
+  delay(15000); // 15 detik
 }

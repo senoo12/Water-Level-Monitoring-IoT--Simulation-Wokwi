@@ -33,7 +33,7 @@ func (h *SensorHandler) ReceiveData(c *gin.Context) {
 		return
 	}
 
-	if data.Distance < 0 || data.Distance > 100 {
+	if data.Distance < 0 || data.Distance > 1000 {
 		response.Error(c, 400, "invalid distance value")
 		return
 	}
