@@ -1,25 +1,46 @@
 package main
 
 import (
-	"github.com/gin-gonic/gin"
-	"github.com/joho/godotenv"
 	"water-monitor/internal/config"
 	"water-monitor/internal/handler"
+	"water-monitor/internal/middleware"
 	"water-monitor/internal/repository"
 	"water-monitor/internal/service"
+
+	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
 )
 
 func main() {
 	godotenv.Load()
+
 	cfg := config.LoadConfig()
 
-	repo := repository.NewThingSpeakRepository(cfg.ThingSpeakAPIKey)
-	service := service.NewSensorService(repo)
-	handler := handler.NewSensorHandler(service)
+	repo := repository.NewThingSpeakRepository(
+		cfg.ThingSpeakAPIKey,
+	)
+
+	sensorService := service.NewSensorService(repo)
+
+	sensorHandler := handler.NewSensorHandler(
+		sensorService,
+	)
 
 	r := gin.Default()
 
-	r.POST("/sensor", handler.ReceiveData)
+	// route tanpa auth
+	r.GET("/", func(c *gin.Context) {
+		c.JSON(200, gin.H{
+			"message": "server running",
+		})
+	})
+
+	// route dengan auth middleware
+	r.POST(
+		"/sensor",
+		middleware.AuthMiddleware(),
+		sensorHandler.ReceiveData,
+	)
 
 	r.Run(":8080")
 }
